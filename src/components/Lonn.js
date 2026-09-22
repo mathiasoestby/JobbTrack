@@ -2,6 +2,7 @@ import { h, Fragment, useState, useMemo } from "../react.js";
 import {
   DAY_MS, netDurationMs, msToHours, calcEarnings, formatDuration, formatMoney,
   formatShortDate, getPeriodForDate, getRecentPeriods, formatPeriodLabel, formatPayoutLabel,
+  projectsForJob, projectBreakdown,
 } from "../lib.js";
 
 export function Lonn({ data, update }) {
@@ -26,6 +27,9 @@ export function Lonn({ data, update }) {
       return { ...sup, hours, sum: hours * sup.rate };
     })
     .filter((sup) => sup.hours > 0);
+  // Underfordeling per prosjekt — bare for jobber som faktisk bruker prosjekter.
+  const usesProjects = projectsForJob(data, jobId).length > 0 || periodEntries.some((e) => e.projectId);
+  const projectRows = usesProjects ? projectBreakdown(periodEntries, data) : [];
 
   const setCheck = (patch) => update((d) => ({
     ...d, checks: { ...d.checks, [`${jobId}|${period.key}`]: { ...check, ...patch } },
@@ -83,6 +87,18 @@ export function Lonn({ data, update }) {
         : h("div", { className: "kv", style: { fontWeight: 600 } },
             h("span", null, "Avtalt månedslønn"), h("span", { className: "num" }, formatMoney(job.salary || 0))
           )
+    ),
+    projectRows.length > 0 && h(Fragment, null,
+      h("h2", null, "Timer per prosjekt"),
+      h("div", { className: "card" },
+        projectRows.map((row) => h("div", { className: "kv", key: row.projectId || "ingen" },
+          h("span", null, row.name),
+          h("span", { className: "num" },
+            formatDuration(row.ms),
+            totalMs > 0 ? ` · ${Math.round((row.ms / totalMs) * 100)} %` : ""
+          )
+        ))
+      )
     ),
     h("h2", null, "Fra lønnsslippen"),
     h("div", { className: "card" },

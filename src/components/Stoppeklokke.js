@@ -1,16 +1,25 @@
 import { h, Fragment, useState } from "../react.js";
-import { newId, netDurationMs, formatDuration, formatClock, formatTimeHM, getBreakMinutes } from "../lib.js";
+import { newId, netDurationMs, formatDuration, formatClock, formatTimeHM, getBreakMinutes, projectsForJob, projectLabel } from "../lib.js";
 import { EntryForm, EntryRow } from "./Entries.js";
 
 export function Stoppeklokke({ data, update, now, jobById }) {
   const running = data.running;
   const [selectedJobId, setSelectedJobId] = useState(data.jobs[0]?.id || "");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [note, setNote] = useState("");
   const [showManualForm, setShowManualForm] = useState(false);
 
+  const selectableProjects = projectsForJob(data, selectedJobId);
+
   const start = () => {
     if (!selectedJobId) return;
-    update((d) => ({ ...d, running: { jobId: selectedJobId, start: new Date().toISOString(), note, sups: [] } }));
+    update((d) => ({
+      ...d,
+      running: {
+        jobId: selectedJobId, start: new Date().toISOString(), note, sups: [],
+        ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
+      },
+    }));
     setNote("");
   };
 
@@ -27,6 +36,7 @@ export function Stoppeklokke({ data, update, now, jobById }) {
         note: d.running.note || "",
         sups: d.running.sups || [],
         breakMin: getBreakMinutes(job, new Date(endIso) - new Date(d.running.start)),
+        ...(d.running.projectId ? { projectId: d.running.projectId } : {}),
       };
       return { ...d, running: null, entries: [entry, ...d.entries] };
     });
@@ -56,6 +66,7 @@ export function Stoppeklokke({ data, update, now, jobById }) {
           h("div", { className: "who" },
             h("span", { className: "dot live", style: { background: runningJob?.color } }),
             runningJob?.name,
+            projectLabel(data, running.projectId) ? ` · ${projectLabel(data, running.projectId)}` : "",
             running.note ? ` · ${running.note}` : ""
           ),
           h("div", { className: "clock num" }, formatClock(now - new Date(running.start))),
@@ -76,8 +87,18 @@ export function Stoppeklokke({ data, update, now, jobById }) {
       : h("div", { className: "hero" },
           h("div", { className: "clock num", style: { color: "#3d4d5b" } }, "00:00:00"),
           h("div", { className: "row", style: { marginTop: 14 } },
-            h("select", { value: selectedJobId, onChange: (e) => setSelectedJobId(e.target.value) },
+            h("select", {
+              value: selectedJobId,
+              onChange: (e) => { setSelectedJobId(e.target.value); setSelectedProjectId(""); },
+            },
               data.jobs.map((j) => h("option", { key: j.id, value: j.id }, j.name))
+            ),
+            // Prosjektvelger bare for jobber som bruker prosjekter.
+            selectableProjects.length > 0 && h("select", {
+              value: selectedProjectId, onChange: (e) => setSelectedProjectId(e.target.value),
+            },
+              h("option", { value: "" }, "Ingen prosjekt"),
+              selectableProjects.map((p) => h("option", { key: p.id, value: p.id }, p.name))
             ),
             h("input", { placeholder: "Hva jobber du med?", value: note, onChange: (e) => setNote(e.target.value) })
           ),

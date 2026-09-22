@@ -3,6 +3,7 @@ import { h, useState } from "../react.js";
 import {
   newId, netDurationMs, formatDuration, formatDateISO, formatTimeHM,
   parseDateTime, formatWeekdayDate, getBreakMinutes, roundTimeToNearest,
+  projectsForJob, projectLabel,
 } from "../lib.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -14,6 +15,7 @@ export function EntryForm({ data, update, onDone, initial }) {
   const [dateStr, setDateStr] = useState(formatDateISO(referenceDate));
   const [fromTime, setFromTime] = useState(initial ? formatTimeHM(new Date(initial.start)) : "09:00");
   const [toTime, setToTime] = useState(initial ? formatTimeHM(new Date(initial.end)) : "17:00");
+  const [projectId, setProjectId] = useState(initial?.projectId || "");
   const [note, setNote] = useState(initial?.note || "");
   const [sups, setSups] = useState(initial?.sups || []);
   const [breakMinInput, setBreakMinInput] = useState(initial ? String(initial.breakMin || 0) : "");
@@ -21,6 +23,7 @@ export function EntryForm({ data, update, onDone, initial }) {
   const [error, setError] = useState("");
 
   const job = data.jobs.find((j) => j.id === jobId);
+  const projects = projectsForJob(data, jobId);
 
   const applyRounding = () => {
     setFromTime(roundTimeToNearest(fromTime, roundMinutes));
@@ -51,6 +54,7 @@ export function EntryForm({ data, update, onDone, initial }) {
       note,
       sups,
       breakMin,
+      ...(projectId ? { projectId } : {}),
     };
     update((d) => ({
       ...d,
@@ -66,13 +70,23 @@ export function EntryForm({ data, update, onDone, initial }) {
     h("div", { className: "row", style: { marginBottom: 8 } },
       h("div", null,
         h("label", null, "Jobb"),
-        h("select", { value: jobId, onChange: (e) => { setJobId(e.target.value); setSups([]); } },
+        h("select", { value: jobId, onChange: (e) => { setJobId(e.target.value); setSups([]); setProjectId(""); } },
           data.jobs.map((j) => h("option", { key: j.id, value: j.id }, j.name))
         )
       ),
       h("div", null,
         h("label", null, "Dato"),
         h("input", { type: "date", value: dateStr, onChange: (e) => setDateStr(e.target.value) })
+      )
+    ),
+    // Prosjektvelger vises bare for jobber som faktisk bruker prosjekter.
+    (projects.length > 0 || projectId) && h("div", { style: { marginBottom: 8 } },
+      h("label", null, "Prosjekt"),
+      h("select", { value: projectId, onChange: (e) => setProjectId(e.target.value) },
+        h("option", { value: "" }, "Ingen prosjekt"),
+        projects.map((p) => h("option", { key: p.id, value: p.id }, p.name)),
+        projectId && !projects.some((p) => p.id === projectId) &&
+          h("option", { value: projectId }, projectLabel(data, projectId))
       )
     ),
     h("div", { className: "row", style: { marginBottom: 8 } },
@@ -146,10 +160,15 @@ export function EntryRow({ e: entry, job, data, update, showDate }) {
     );
   }
 
+  const project = projectLabel(data, entry.projectId);
+
   return h("div", { className: "entry" },
     h("span", { className: "dot", style: { background: job?.color || "#666" } }),
     h("div", { className: "meta" },
-      h("div", { className: "name" }, job?.name || "Slettet jobb", entry.note ? ` · ${entry.note}` : ""),
+      h("div", { className: "name" },
+        job?.name || "Slettet jobb",
+        project ? ` · ${project}` : "",
+        entry.note ? ` · ${entry.note}` : ""),
       h("div", { className: "when num" },
         showDate ? `${formatWeekdayDate(start)} · ` : "",
         formatTimeHM(start), "–", formatTimeHM(end),

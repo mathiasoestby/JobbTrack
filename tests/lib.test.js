@@ -8,6 +8,7 @@ import {
   startOfDay, getJobPeriodSettings, getPeriodForDate, formatPeriodLabel, formatPayoutLabel,
   getRecentPeriods, rawDurationMs, netDurationMs, getBreakMinutes, calcEarnings,
   roundTimeToNearest, DAY_MS,
+  projectsForJob, findProject, projectLabel, hoursByProject, projectBreakdown,
 } from "../src/lib.js";
 
 describe("formatering", () => {
@@ -178,5 +179,75 @@ describe("varighet og lønnsberegning", () => {
     assert.equal(calcEarnings(entry, fixedJob), 0);
     assert.equal(calcEarnings(entry, hourlyJob), 7.5 * 200);
     assert.equal(calcEarnings({ ...entry, sups: ["kveld"] }, hourlyJob), 7.5 * 250);
+  });
+});
+
+describe("prosjekter", () => {
+  const data = {
+    jobs: [{ id: "j1", name: "Kafé" }, { id: "j2", name: "Lager" }],
+    projects: [
+      { id: "p1", jobId: "j1", name: "Bar" },
+      { id: "p2", jobId: "j1", name: "Kjøkken" },
+      { id: "p3", jobId: "j2", name: "Nattskift" },
+    ],
+    entries: [],
+  };
+  const hours = (n) => ({ start: "2026-03-05T08:00:00Z", end: `2026-03-05T${pad2(8 + n)}:00:00Z` });
+  const entries = [
+    { id: "e1", jobId: "j1", projectId: "p1", ...hours(4) },
+    { id: "e2", jobId: "j1", projectId: "p2", ...hours(2) },
+    { id: "e3", jobId: "j1", projectId: "p1", ...hours(3) },
+    { id: "e4", jobId: "j1", ...hours(1) }, // uten prosjekt
+    { id: "e5", jobId: "j1", projectId: "borte", ...hours(1) }, // slettet prosjekt
+  ];
+
+  test("projectsForJob gir bare prosjektene til én jobb", () => {
+    assert.deepEqual(projectsForJob(data, "j1").map((p) => p.name), ["Bar", "Kjøkken"]);
+    assert.deepEqual(projectsForJob(data, "j2").map((p) => p.name), ["Nattskift"]);
+    assert.deepEqual(projectsForJob(data, "ukjent"), []);
+  });
+
+  test("projectsForJob tåler gammel data uten projects-liste", () => {
+    assert.deepEqual(projectsForJob({ jobs: [] }, "j1"), []);
+    assert.deepEqual(projectsForJob(undefined, "j1"), []);
+  });
+
+  test("findProject finner prosjektet, ellers null", () => {
+    assert.equal(findProject(data, "p2").name, "Kjøkken");
+    assert.equal(findProject(data, "borte"), null);
+    assert.equal(findProject(data, undefined), null);
+  });
+
+  test("projectLabel: tom uten prosjekt, navn ellers, markert når prosjektet er slettet", () => {
+    assert.equal(projectLabel(data, undefined), "");
+    assert.equal(projectLabel(data, "p1"), "Bar");
+    assert.equal(projectLabel(data, "borte"), "(slettet prosjekt)");
+  });
+
+  test("hoursByProject summerer nettotimer for ett prosjekt", () => {
+    assert.equal(hoursByProject(entries, "p1"), 7);
+    assert.equal(hoursByProject(entries, "p2"), 2);
+    assert.equal(hoursByProject(entries, null), 1); // føringer uten prosjekt
+    assert.equal(hoursByProject(entries, "p3"), 0);
+  });
+
+  test("hoursByProject trekker fra lunsj", () => {
+    const withBreak = [{ jobId: "j1", projectId: "p1", breakMin: 30, ...hours(4) }];
+    assert.equal(hoursByProject(withBreak, "p1"), 3.5);
+  });
+
+  test("projectBreakdown grupperer, sorterer synkende og legger 'uten prosjekt' sist", () => {
+    const rows = projectBreakdown(entries, data);
+    assert.deepEqual(rows.map((r) => [r.name, r.hours, r.count]), [
+      ["Bar", 7, 2],
+      ["Kjøkken", 2, 1],
+      ["(slettet prosjekt)", 1, 1],
+      ["Uten prosjekt", 1, 1],
+    ]);
+    assert.equal(rows[3].projectId, null);
+  });
+
+  test("projectBreakdown er tom når det ikke finnes føringer", () => {
+    assert.deepEqual(projectBreakdown([], data), []);
   });
 });

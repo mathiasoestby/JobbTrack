@@ -44,6 +44,7 @@ export function defaultData() {
         sups: [],
       },
     ],
+    projects: [],
     entries: [],
     running: null,
     checks: {},
@@ -54,7 +55,8 @@ export async function loadData() {
   for (const key of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
     try {
       const result = await window.storage.get(key);
-      if (result && result.value) return JSON.parse(result.value);
+      // `projects` kom til senere — gammel data har den ikke.
+      if (result && result.value) return { projects: [], ...JSON.parse(result.value) };
     } catch {
       // prøv neste nøkkel
     }

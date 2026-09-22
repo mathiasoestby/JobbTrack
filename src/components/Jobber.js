@@ -1,5 +1,5 @@
 import { h, Fragment, useState } from "../react.js";
-import { newId, getJobPeriodSettings, getRecentPeriods, formatPeriodLabel, formatPayoutLabel, formatDateISO } from "../lib.js";
+import { newId, getJobPeriodSettings, getRecentPeriods, formatPeriodLabel, formatPayoutLabel, formatDateISO, projectsForJob } from "../lib.js";
 
 export function Jobber({ data, update }) {
   const setJob = (jobId, patch) => update((d) => ({ ...d, jobs: d.jobs.map((j) => (j.id === jobId ? { ...j, ...patch } : j)) }));
@@ -66,9 +66,37 @@ export function Jobber({ data, update }) {
         )),
         h("button", { className: "tiny ghost", onClick: () => setJob(job.id, { sups: [...job.sups, { id: newId(), name: "Nytt tillegg", rate: 0 }] }) }, "Legg til tillegg")
       ),
+      h(Prosjekter, { job, data, update }),
       h(DeleteJobButton, { job, data, update })
     )),
     h("button", { className: "primary", onClick: addJob }, "Legg til jobb")
+  );
+}
+
+// Prosjekter er valgfrie underdelinger av en jobb. Sletting er myk: føringene
+// beholder `projectId` og vises som "(slettet prosjekt)", slik slettede jobber også gjør.
+function Prosjekter({ job, data, update }) {
+  const projects = projectsForJob(data, job.id);
+  const setProject = (id, patch) => update((d) => ({
+    ...d, projects: (d.projects || []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
+  }));
+  const removeProject = (id) => update((d) => ({ ...d, projects: (d.projects || []).filter((p) => p.id !== id) }));
+  const addProject = () => update((d) => ({
+    ...d, projects: [...(d.projects || []), { id: newId(), jobId: job.id, name: "Nytt prosjekt" }],
+  }));
+
+  return h("div", { style: { borderTop: "1px solid var(--line)", marginTop: 12, paddingTop: 12 } },
+    h("label", null, "Prosjekter (valgfritt — for å dele timene innenfor jobben)"),
+    projects.map((project) => {
+      const entryCount = data.entries.filter((e) => e.projectId === project.id).length;
+      return h("div", { className: "row", key: project.id, style: { marginBottom: 6, alignItems: "center" } },
+        h("input", { value: project.name, onChange: (e) => setProject(project.id, { name: e.target.value }) }),
+        entryCount > 0 && h("span", { className: "num", style: { flex: "0 0 auto", color: "var(--muted)", fontSize: 12.5 } },
+          entryCount, " ", entryCount === 1 ? "føring" : "føringer"),
+        h("button", { className: "ghost tiny", style: { flex: "0 0 auto" }, onClick: () => removeProject(project.id) }, "Fjern")
+      );
+    }),
+    h("button", { className: "tiny ghost", onClick: addProject }, "Legg til prosjekt")
   );
 }
 
@@ -96,7 +124,7 @@ export function Sikkerhetskopi({ data, update }) {
     try {
       const parsed = JSON.parse(pasted);
       if (!parsed.jobs || !parsed.entries) throw new Error();
-      update(() => ({ running: null, checks: {}, ...parsed }));
+      update(() => ({ running: null, checks: {}, projects: [], ...parsed }));
       setMessage("Timelista er gjenopprettet.");
       setPasted("");
     } catch {

@@ -136,6 +136,47 @@ export function getBreakMinutes(job, durationMs) {
   return durationMs >= threshold ? breakMin : 0;
 }
 
+// --- Prosjekter ---------------------------------------------------------
+// Et prosjekt hører til én jobb: {id, jobId, name, color?}. En føring kan ha `projectId`.
+// Sletting er myk: føringene beholder id-en, og vises som "(slettet prosjekt)".
+
+export const NO_PROJECT_LABEL = "Uten prosjekt";
+export const DELETED_PROJECT_LABEL = "(slettet prosjekt)";
+
+export const projectsForJob = (data, jobId) => (data?.projects || []).filter((p) => p.jobId === jobId);
+
+export const findProject = (data, projectId) =>
+  (projectId && (data?.projects || []).find((p) => p.id === projectId)) || null;
+
+// "" når føringen ikke har prosjekt i det hele tatt.
+export const projectLabel = (data, projectId) =>
+  !projectId ? "" : findProject(data, projectId)?.name || DELETED_PROJECT_LABEL;
+
+export const hoursByProject = (entries, projectId) =>
+  msToHours(entries
+    .filter((e) => (e.projectId || null) === (projectId || null))
+    .reduce((sum, e) => sum + netDurationMs(e), 0));
+
+// Timer per prosjekt, mest først. Føringer uten prosjekt samles i én rad til slutt.
+export function projectBreakdown(entries, data) {
+  const buckets = new Map();
+  entries.forEach((entry) => {
+    const key = entry.projectId || null;
+    const bucket = buckets.get(key) || { projectId: key, name: "", ms: 0, count: 0 };
+    bucket.ms += netDurationMs(entry);
+    bucket.count += 1;
+    buckets.set(key, bucket);
+  });
+  return [...buckets.values()]
+    .map((b) => ({
+      ...b,
+      name: b.projectId ? projectLabel(data, b.projectId) : NO_PROJECT_LABEL,
+      color: findProject(data, b.projectId)?.color,
+      hours: msToHours(b.ms),
+    }))
+    .sort((a, b) => (a.projectId === null) - (b.projectId === null) || b.ms - a.ms);
+}
+
 // Forventet lønn for én føring: 0 for fastlønn, ellers timer * (timelønn + eventuelle tillegg).
 export function calcEarnings(entry, job) {
   if (!job || job.kind === "fixed") return 0;
