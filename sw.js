@@ -1,9 +1,29 @@
 // Enkel offline-cache for Timeliste. Legg denne ved siden av timeliste.html.
-const CACHE = "timeliste-v1";
+const CACHE = "timeliste-v2";
+
+const APP_FILES = [
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./manifest.json",
+  "./src/main.js",
+  "./src/react.js",
+  "./src/lib.js",
+  "./src/store.js",
+  "./src/firebase.js",
+  "./src/App.js",
+  "./src/components/AuthGate.js",
+  "./src/components/Stoppeklokke.js",
+  "./src/components/Timeliste.js",
+  "./src/components/Lonn.js",
+  "./src/components/Jobber.js",
+  "./src/components/Kalender.js",
+  "./src/components/Entries.js",
+];
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["./", "./index.html"]).catch(() => {})));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_FILES).catch(() => {})));
 });
 
 self.addEventListener("activate", (e) => {

@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+* { box-sizing: border-box; }
+.app {
+  --ink:#101820; --surface:#17222c; --line:#26333f; --text:#e8edf1; --muted:#8fa3b0;
+  --amber:#ffb23f; --teal:#4ec9b0; --red:#ff7a6b;
+  background: var(--ink); color: var(--text); min-height: 100vh;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.45;
+  padding: 18px 16px 90px; max-width: 720px; margin: 0 auto;
+}
+.num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+h1 { font-size: 19px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 22px 0 8px; }
+p.sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+         background: #1e2b36; color: var(--text); padding: 9px 13px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+button.primary { background: var(--amber); color: #14202b; border-color: var(--amber); font-weight: 600; }
+button.stop { background: var(--red); border-color: var(--red); color: #201010; font-weight: 600; }
+button.ghost { background: transparent; color: var(--muted); }
+button.tiny { padding: 5px 9px; font-size: 12.5px; }
+input, select { font: inherit; background: #121b23; color: var(--text); border: 1px solid var(--line);
+                border-radius: 8px; padding: 9px 10px; width: 100%; }
+label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row > * { flex: 1 1 120px; }
+.hero { text-align: center; padding: 26px 14px 20px; border: 1px solid var(--line); border-radius: 12px;
+        background: linear-gradient(180deg,#1b2733,#151f28); margin-bottom: 12px; }
+.hero .clock { font-size: 46px; font-weight: 500; letter-spacing: -0.02em; }
+.hero .who { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 7px; vertical-align: 1px; }
+.live { animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .35 } }
+@media (prefers-reduced-motion: reduce) { .live { animation: none } }
+.entry { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.entry:last-child { border-bottom: 0; }
+.entry .meta { flex: 1; min-width: 0; }
+.entry .name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry .when { color: var(--muted); font-size: 12.5px; }
+.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #0c141b;
+        border-top: 1px solid var(--line); padding: 6px; gap: 4px; }
+.tabs button { flex: 1; background: transparent; border: 0; color: var(--muted); padding: 10px 4px; font-size: 13px; }
+.tabs button[data-on="1"] { color: var(--amber); background: #16212b; }
+.chip { border-radius: 999px; padding: 5px 11px; font-size: 12.5px; border: 1px solid var(--line);
+        background: transparent; color: var(--muted); flex: 0 0 auto; }
+.chip[data-on="1"] { border-color: var(--amber); color: var(--amber); }
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; }
+.kv + .kv { border-top: 1px dashed var(--line); }
+.kv span:last-child { white-space: nowrap; }
+.verdict { border-radius: 10px; padding: 12px; margin-top: 10px; font-size: 14px; }
+.ok { background: rgba(78,201,176,.12); border: 1px solid rgba(78,201,176,.4); color: var(--teal); }
+.bad { background: rgba(255,122,107,.12); border: 1px solid rgba(255,122,107,.4); color: var(--red); }
+.warn { background: rgba(255,178,63,.1); border: 1px solid rgba(255,178,63,.35); color: var(--amber); font-size: 13px; }
+.empty { color: var(--muted); font-size: 13.5px; padding: 10px 0; }
+textarea { width: 100%; height: 130px; background: #121b23; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.layout { display: flex; gap: 20px; align-items: flex-start; justify-content: center; }
+.main-col { flex: 1 1 auto; min-width: 0; max-width: 720px; width: 100%; }
+.calendar-panel { display: none; }
+@media (min-width: 960px) {
+  .app { max-width: 1080px; }
+  .calendar-panel { display: block; flex: 0 0 330px; position: sticky; top: 18px; }
+}
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 2px; }
+.cal-dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 3px; background: #121b23; border: 1px solid var(--line); border-radius: 6px; color: var(--text);
+            padding: 2px; font-size: 11px; }
+.cal-cell.cal-empty { background: transparent; border-color: transparent; }
+.cal-cell.cal-has { border-color: #3a4b58; }
+.cal-cell.cal-today { border-color: var(--amber); }
+.cal-cell.cal-selected { background: #1e2b36; border-color: var(--amber); }
+.cal-daynum { font-family: 'IBM Plex Mono', monospace; }
+.cal-dots { display: flex; gap: 2px; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
+.cal-sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.cal-detail .entry { padding: 7px 0; }
