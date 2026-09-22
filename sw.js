@@ -1,5 +1,5 @@
 // Enkel offline-cache for Timeliste. Legg denne ved siden av timeliste.html.
-const CACHE = "timeliste-v2";
+const CACHE = "timeliste-v3";
 
 const APP_FILES = [
   "./",
@@ -17,6 +17,7 @@ const APP_FILES = [
   "./src/components/Timeliste.js",
   "./src/components/Lonn.js",
   "./src/components/Jobber.js",
+  "./src/components/Rapport.js",
   "./src/components/Kalender.js",
   "./src/components/Entries.js",
 ];

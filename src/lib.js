@@ -187,3 +187,101 @@ export function calcEarnings(entry, job) {
   );
   return hours * ((job.rate || 0) + supRateSum);
 }
+
+// --- Rapport ------------------------------------------------------------
+// Aggregering for rapportfanen. Perioden er alltid [start, end) med start på døgnskillet,
+// og en føring hører til dagen den startet — samme regel som resten av appen bruker.
+
+export const REPORT_RANGES = [
+  ["uke", "Denne uken"],
+  ["maned", "Denne måneden"],
+  ["3mnd", "Siste 3 måneder"],
+  ["ar", "I år"],
+];
+
+export function getReportRange(preset, now = new Date()) {
+  const day = startOfDay(now);
+  if (preset === "uke") {
+    const mondayOffset = (day.getDay() + 6) % 7;
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate() - mondayOffset);
+    return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7) };
+  }
+  if (preset === "ar") {
+    return { start: new Date(day.getFullYear(), 0, 1), end: new Date(day.getFullYear() + 1, 0, 1) };
+  }
+  const monthsBack = preset === "3mnd" ? 2 : 0;
+  return {
+    start: new Date(day.getFullYear(), day.getMonth() - monthsBack, 1),
+    end: new Date(day.getFullYear(), day.getMonth() + 1, 1),
+  };
+}
+
+export const entriesInRange = (entries, start, end) =>
+  entries.filter((e) => {
+    const entryStart = new Date(e.start);
+    return entryStart >= start && entryStart < end;
+  });
+
+// Nøkkeltallene øverst i rapporten. `hasGross` er falsk når ingen av føringene
+// hører til en timelønnet jobb — da sier et bruttotall ingenting.
+export function summarizeEntries(entries, jobs) {
+  const totalMs = entries.reduce((sum, e) => sum + netDurationMs(e), 0);
+  const gross = entries.reduce((sum, e) => sum + calcEarnings(e, jobs.find((j) => j.id === e.jobId)), 0);
+  return {
+    totalMs,
+    count: entries.length,
+    avgMs: entries.length ? totalMs / entries.length : 0,
+    gross,
+    hasGross: entries.some((e) => jobs.find((j) => j.id === e.jobId)?.kind === "hourly"),
+  };
+}
+
+// Dagsøyler blir uleselige over lange perioder, så lange perioder grupperes grovere.
+export const bucketUnitForRange = (preset) =>
+  preset === "ar" ? "maned" : preset === "3mnd" ? "uke" : "dag";
+
+// Søylene i diagrammet: én bøtte per dag/uke/måned i perioden, også de tomme,
+// så diagrammet viser hullene like tydelig som toppene.
+export function bucketTotals(entries, start, end, unit = "dag") {
+  const nextStart = (d) => {
+    if (unit === "maned") return new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (unit === "uke" ? 7 : 1));
+  };
+
+  const buckets = [];
+  for (let cursor = new Date(start); cursor < end; cursor = nextStart(cursor)) {
+    const bucketEnd = nextStart(cursor);
+    buckets.push({ date: cursor, end: bucketEnd > end ? new Date(end) : bucketEnd, ms: 0, byJob: {} });
+  }
+
+  entriesInRange(entries, start, end).forEach((entry) => {
+    const entryStart = new Date(entry.start);
+    const bucket = buckets.find((b) => entryStart >= b.date && entryStart < b.end);
+    if (!bucket) return;
+    const ms = netDurationMs(entry);
+    bucket.ms += ms;
+    bucket.byJob[entry.jobId] = (bucket.byJob[entry.jobId] || 0) + ms;
+  });
+  return buckets;
+}
+
+// Én rad per dag i perioden — også dagene uten føringer, så stolpediagrammet får riktig bredde.
+export const dailyTotals = (entries, start, end) => bucketTotals(entries, start, end, "dag");
+
+// Timer og brutto per jobb, mest først. Jobber uten føringer i perioden tas ikke med.
+export function jobBreakdown(entries, jobs) {
+  const buckets = new Map();
+  entries.forEach((entry) => {
+    const bucket = buckets.get(entry.jobId) || { jobId: entry.jobId, ms: 0, count: 0, gross: 0 };
+    bucket.ms += netDurationMs(entry);
+    bucket.count += 1;
+    bucket.gross += calcEarnings(entry, jobs.find((j) => j.id === entry.jobId));
+    buckets.set(entry.jobId, bucket);
+  });
+  return [...buckets.values()]
+    .map((b) => {
+      const job = jobs.find((j) => j.id === b.jobId);
+      return { ...b, name: job?.name || "Slettet jobb", color: job?.color || "#66798a", kind: job?.kind, hours: msToHours(b.ms) };
+    })
+    .sort((a, b) => b.ms - a.ms);
+}

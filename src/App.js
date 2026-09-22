@@ -4,12 +4,15 @@ import { Stoppeklokke } from "./components/Stoppeklokke.js";
 import { Timeliste } from "./components/Timeliste.js";
 import { Lonn } from "./components/Lonn.js";
 import { Jobber, Sikkerhetskopi } from "./components/Jobber.js";
+import { Rapport } from "./components/Rapport.js";
 import { TidsKalender } from "./components/Kalender.js";
 
+// Korte faneetiketter — fem faner må få plass side om side på en smal telefon.
 const TABS = [
-  ["tid", "Stoppeklokke"],
+  ["tid", "Klokke"],
   ["liste", "Timeliste"],
-  ["lonn", "Lønnssjekk"],
+  ["lonn", "Lønn"],
+  ["rapport", "Rapport"],
   ["jobber", "Jobber"],
 ];
 
@@ -69,6 +72,7 @@ export function App() {
         activeTab === "tid" && h(Stoppeklokke, { data, update, now, jobById }),
         activeTab === "liste" && h(Timeliste, { data, update, jobById }),
         activeTab === "lonn" && h(Lonn, { data, update }),
+        activeTab === "rapport" && h(Rapport, { data }),
         activeTab === "jobber" && h(Fragment, null, h(Jobber, { data, update }), h(Sikkerhetskopi, { data, update }))
       ),
       h(TidsKalender, { data, jobById, update })

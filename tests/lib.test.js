@@ -9,6 +9,8 @@ import {
   getRecentPeriods, rawDurationMs, netDurationMs, getBreakMinutes, calcEarnings,
   roundTimeToNearest, DAY_MS,
   projectsForJob, findProject, projectLabel, hoursByProject, projectBreakdown,
+  getReportRange, entriesInRange, summarizeEntries, dailyTotals, jobBreakdown,
+  bucketTotals, bucketUnitForRange,
 } from "../src/lib.js";
 
 describe("formatering", () => {
@@ -249,5 +251,158 @@ describe("prosjekter", () => {
 
   test("projectBreakdown er tom når det ikke finnes føringer", () => {
     assert.deepEqual(projectBreakdown([], data), []);
+  });
+});
+
+describe("rapport", () => {
+  const jobs = [
+    { id: "j1", name: "Kafé", kind: "hourly", rate: 200, color: "#ffb23f", sups: [] },
+    { id: "j2", name: "Lager", kind: "fixed", salary: 30000, color: "#4ec9b0", sups: [] },
+  ];
+  // Lokale klokkeslett, slik føringene lagres og leses i appen.
+  const shift = (jobId, day, fromHour, toHour, extra = {}) => ({
+    id: `${jobId}-${day}-${fromHour}`,
+    jobId,
+    start: new Date(2026, 2, day, fromHour).toISOString(),
+    end: new Date(2026, 2, day, toHour).toISOString(),
+    ...extra,
+  });
+
+  describe("getReportRange", () => {
+    const now = new Date(2026, 2, 18, 13, 30); // onsdag 18. mars 2026
+
+    test("uke starter på mandag og varer sju dager", () => {
+      const { start, end } = getReportRange("uke", now);
+      assert.equal(formatDateISO(start), "2026-03-16");
+      assert.equal(formatDateISO(end), "2026-03-23");
+    });
+
+    test("uke ruller riktig tilbake på en søndag", () => {
+      const { start } = getReportRange("uke", new Date(2026, 2, 22)); // søndag
+      assert.equal(formatDateISO(start), "2026-03-16");
+    });
+
+    test("måned dekker kalendermåneden", () => {
+      const { start, end } = getReportRange("maned", now);
+      assert.equal(formatDateISO(start), "2026-03-01");
+      assert.equal(formatDateISO(end), "2026-04-01");
+    });
+
+    test("3 måneder dekker inneværende og de to foregående månedene", () => {
+      const { start, end } = getReportRange("3mnd", now);
+      assert.equal(formatDateISO(start), "2026-01-01");
+      assert.equal(formatDateISO(end), "2026-04-01");
+    });
+
+    test("år dekker kalenderåret", () => {
+      const { start, end } = getReportRange("ar", now);
+      assert.equal(formatDateISO(start), "2026-01-01");
+      assert.equal(formatDateISO(end), "2027-01-01");
+    });
+  });
+
+  test("entriesInRange tar med start-dagen og utelater slutt-dagen", () => {
+    const entries = [shift("j1", 15, 8, 12), shift("j1", 16, 8, 12), shift("j1", 23, 8, 12)];
+    const { start, end } = getReportRange("uke", new Date(2026, 2, 18));
+    assert.deepEqual(entriesInRange(entries, start, end).map((e) => e.id), ["j1-16-8"]);
+  });
+
+  test("summarizeEntries gir totaltid, antall vakter, snitt og brutto", () => {
+    const entries = [
+      shift("j1", 16, 8, 12), // 4 t
+      shift("j1", 17, 8, 14, { breakMin: 30 }), // 5,5 t
+      shift("j2", 18, 9, 13), // fastlønn – teller timer, men ikke brutto
+    ];
+    const s = summarizeEntries(entries, jobs);
+    assert.equal(s.count, 3);
+    assert.equal(msToHours(s.totalMs), 13.5);
+    assert.equal(msToHours(s.avgMs), 4.5);
+    assert.equal(s.gross, 9.5 * 200);
+    assert.equal(s.hasGross, true);
+  });
+
+  test("summarizeEntries tåler tom liste og jobber uten timelønn", () => {
+    assert.deepEqual(summarizeEntries([], jobs), { totalMs: 0, count: 0, avgMs: 0, gross: 0, hasGross: false });
+    const onlyFixed = summarizeEntries([shift("j2", 18, 9, 13)], jobs);
+    assert.equal(onlyFixed.gross, 0);
+    assert.equal(onlyFixed.hasGross, false);
+  });
+
+  test("dailyTotals gir én rad per dag i perioden, også de tomme", () => {
+    const entries = [shift("j1", 16, 8, 12), shift("j2", 16, 13, 15), shift("j1", 18, 8, 9)];
+    const { start, end } = getReportRange("uke", new Date(2026, 2, 18));
+    const days = dailyTotals(entries, start, end);
+
+    assert.equal(days.length, 7);
+    assert.equal(formatDateISO(days[0].date), "2026-03-16");
+    assert.equal(formatDateISO(days[6].date), "2026-03-22");
+    assert.equal(msToHours(days[0].ms), 6);
+    assert.deepEqual(days[0].byJob, { j1: 4 * 3600000, j2: 2 * 3600000 });
+    assert.equal(days[1].ms, 0);
+    assert.deepEqual(days[1].byJob, {});
+    assert.equal(msToHours(days[2].ms), 1);
+  });
+
+  test("dailyTotals plasserer nattevakter på dagen de startet", () => {
+    const nightShift = {
+      id: "natt", jobId: "j1",
+      start: new Date(2026, 2, 16, 22).toISOString(),
+      end: new Date(2026, 2, 17, 6).toISOString(),
+    };
+    const { start, end } = getReportRange("uke", new Date(2026, 2, 18));
+    const days = dailyTotals([nightShift], start, end);
+    assert.equal(msToHours(days[0].ms), 8);
+    assert.equal(days[1].ms, 0);
+  });
+
+  test("bucketUnitForRange velger grovere søyler for lange perioder", () => {
+    assert.equal(bucketUnitForRange("uke"), "dag");
+    assert.equal(bucketUnitForRange("maned"), "dag");
+    assert.equal(bucketUnitForRange("3mnd"), "uke");
+    assert.equal(bucketUnitForRange("ar"), "maned");
+  });
+
+  test("bucketTotals samler timene i uker fra periodestart", () => {
+    const entries = [shift("j1", 3, 8, 12), shift("j1", 9, 8, 10), shift("j2", 31, 8, 9)];
+    const { start, end } = getReportRange("3mnd", new Date(2026, 2, 18)); // 1. jan – 1. apr
+    const weeks = bucketTotals(entries, start, end, "uke");
+
+    assert.equal(weeks.length, 13); // 90 dager / 7, rundet opp
+    assert.equal(formatDateISO(weeks[0].date), "2026-01-01");
+    assert.equal(formatDateISO(weeks[1].date), "2026-01-08");
+    assert.equal(formatDateISO(weeks[12].end), "2026-04-01"); // siste bøtte klippes mot periodeslutt
+    assert.equal(msToHours(weeks[8].ms), 4); // 3. mars, niende uke etter 1. januar
+    assert.equal(msToHours(weeks[9].ms), 2); // 9. mars
+    assert.equal(msToHours(weeks[12].ms), 1); // 31. mars
+  });
+
+  test("bucketTotals samler timene i kalendermåneder", () => {
+    const entries = [shift("j1", 3, 8, 12), shift("j1", 9, 8, 10)];
+    const { start, end } = getReportRange("ar", new Date(2026, 2, 18));
+    const months = bucketTotals(entries, start, end, "maned");
+
+    assert.equal(months.length, 12);
+    assert.equal(formatDateISO(months[0].date), "2026-01-01");
+    assert.equal(months[0].ms, 0);
+    assert.equal(msToHours(months[2].ms), 6); // mars
+    assert.deepEqual(months[2].byJob, { j1: 6 * 3600000 });
+  });
+
+  test("jobBreakdown summerer per jobb, mest først, og navngir slettede jobber", () => {
+    const entries = [
+      shift("j1", 16, 8, 12),
+      shift("j2", 16, 13, 18),
+      shift("j1", 17, 8, 10),
+      shift("borte", 18, 8, 9),
+    ];
+    const rows = jobBreakdown(entries, jobs);
+    assert.deepEqual(rows.map((r) => [r.name, msToHours(r.ms), r.count]), [
+      ["Kafé", 6, 2],
+      ["Lager", 5, 1],
+      ["Slettet jobb", 1, 1],
+    ]);
+    assert.equal(rows[0].color, "#ffb23f");
+    assert.equal(rows[0].gross, 6 * 200);
+    assert.deepEqual(jobBreakdown([], jobs), []);
   });
 });
