@@ -47,6 +47,15 @@ export function parseDateTime(dateStr, timeStr) {
   return new Date(year, month - 1, day, hours, minutes, 0, 0);
 }
 
+// "08:47" rundet til nærmeste 5/10/15 min -> "08:45". Ruller over midnatt ved behov.
+export function roundTimeToNearest(timeStr, minutes) {
+  const [h, m] = timeStr.split(":").map(Number);
+  const totalMinutes = h * 60 + m;
+  const rounded = Math.round(totalMinutes / minutes) * minutes;
+  const wrapped = ((rounded % 1440) + 1440) % 1440;
+  return `${pad2(Math.floor(wrapped / 60))}:${pad2(wrapped % 60)}`;
+}
+
 export const formatWeekdayDate = (date) =>
   `${WEEKDAY_NAMES_SHORT[date.getDay()]} ${date.getDate()}. ${MONTH_NAMES_SHORT[date.getMonth()]}`;
 

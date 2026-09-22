@@ -2,7 +2,7 @@
 import { h, useState } from "../react.js";
 import {
   newId, netDurationMs, formatDuration, formatDateISO, formatTimeHM,
-  parseDateTime, formatWeekdayDate, getBreakMinutes,
+  parseDateTime, formatWeekdayDate, getBreakMinutes, roundTimeToNearest,
 } from "../lib.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -17,9 +17,15 @@ export function EntryForm({ data, update, onDone, initial }) {
   const [note, setNote] = useState(initial?.note || "");
   const [sups, setSups] = useState(initial?.sups || []);
   const [breakMinInput, setBreakMinInput] = useState(initial ? String(initial.breakMin || 0) : "");
+  const [roundMinutes, setRoundMinutes] = useState(5);
   const [error, setError] = useState("");
 
   const job = data.jobs.find((j) => j.id === jobId);
+
+  const applyRounding = () => {
+    setFromTime(roundTimeToNearest(fromTime, roundMinutes));
+    setToTime(roundTimeToNearest(toTime, roundMinutes));
+  };
 
   const save = () => {
     const start = parseDateTime(dateStr, fromTime);
@@ -78,6 +84,17 @@ export function EntryForm({ data, update, onDone, initial }) {
         h("label", null, "Til"),
         h("input", { type: "time", value: toTime, onChange: (e) => setToTime(e.target.value) })
       )
+    ),
+    h("div", { className: "row", style: { marginBottom: 8, alignItems: "flex-end" } },
+      h("div", { style: { flex: "0 0 150px" } },
+        h("label", null, "Rund av til nærmeste"),
+        h("select", { value: roundMinutes, onChange: (e) => setRoundMinutes(Number(e.target.value)) },
+          h("option", { value: 5 }, "5 min"),
+          h("option", { value: 10 }, "10 min"),
+          h("option", { value: 15 }, "15 min")
+        )
+      ),
+      h("button", { type: "button", className: "ghost tiny", style: { flex: "0 0 auto" }, onClick: applyRounding }, "Rund av fra/til")
     ),
     h("div", { className: "row", style: { marginBottom: 8 } },
       h("div", { style: { flex: "0 0 130px" } },
