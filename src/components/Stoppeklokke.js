@@ -1,6 +1,7 @@
 import { h, Fragment, useState } from "../react.js";
-import { newId, netDurationMs, formatDuration, formatClock, formatTimeHM, getBreakMinutes, projectsForJob, projectLabel } from "../lib.js";
+import { newId, netDurationMs, formatDuration, formatClock, formatTimeHM, getBreakMinutes, projectsForJob, projectLabel, previousStopTime } from "../lib.js";
 import { EntryForm, EntryRow } from "./Entries.js";
+import { Tidshjul } from "./Tidshjul.js";
 
 export function Stoppeklokke({ data, update, now, jobById }) {
   const running = data.running;
@@ -8,6 +9,8 @@ export function Stoppeklokke({ data, update, now, jobById }) {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [note, setNote] = useState("");
   const [showManualForm, setShowManualForm] = useState(false);
+  // Utkast til ny starttid mens tidshjulet er åpent; null = ikke i justeringsmodus.
+  const [draftStart, setDraftStart] = useState(null);
 
   const selectableProjects = projectsForJob(data, selectedJobId);
 
@@ -21,6 +24,7 @@ export function Stoppeklokke({ data, update, now, jobById }) {
       },
     }));
     setNote("");
+    setDraftStart(null);
   };
 
   const stop = () => {
@@ -40,6 +44,12 @@ export function Stoppeklokke({ data, update, now, jobById }) {
       };
       return { ...d, running: null, entries: [entry, ...d.entries] };
     });
+  };
+
+  const saveDraftStart = () => {
+    const newStart = draftStart.toISOString();
+    update((d) => (d.running ? { ...d, running: { ...d.running, start: newStart } } : d));
+    setDraftStart(null);
   };
 
   const toggleRunningSup = (supId) => update((d) => ({
@@ -69,20 +79,37 @@ export function Stoppeklokke({ data, update, now, jobById }) {
             projectLabel(data, running.projectId) ? ` · ${projectLabel(data, running.projectId)}` : "",
             running.note ? ` · ${running.note}` : ""
           ),
-          h("div", { className: "clock num" }, formatClock(now - new Date(running.start))),
-          h("div", { className: "who" },
-            "startet ", formatTimeHM(new Date(running.start)),
-            getBreakMinutes(runningJob, now - new Date(running.start)) > 0
-              ? ` · ${getBreakMinutes(runningJob, now - new Date(running.start))} min lunsj trekkes ved stopp`
-              : ""
-          ),
+          draftStart
+            ? h(Tidshjul, {
+                start: draftStart,
+                end: null,
+                now,
+                onChange: ({ start }) => setDraftStart(start),
+                previousStop: previousStopTime(data.entries, new Date(now)),
+              })
+            : h(Fragment, null,
+                h("div", { className: "clock num" }, formatClock(now - new Date(running.start))),
+                h("div", { className: "who" },
+                  "startet ", formatTimeHM(new Date(running.start)),
+                  getBreakMinutes(runningJob, now - new Date(running.start)) > 0
+                    ? ` · ${getBreakMinutes(runningJob, now - new Date(running.start))} min lunsj trekkes ved stopp`
+                    : "",
+                  " · ",
+                  h("button", { className: "linkbtn", onClick: () => setDraftStart(new Date(running.start)) }, "Juster start")
+                )
+              ),
           runningJob?.sups?.length > 0 && h("div", { className: "row", style: { justifyContent: "center", margin: "12px 0 4px" } },
             runningJob.sups.map((sup) => h("button", {
               key: sup.id, className: "chip", "data-on": (running.sups || []).includes(sup.id) ? "1" : "0",
               onClick: () => toggleRunningSup(sup.id),
             }, sup.name))
           ),
-          h("button", { className: "stop", style: { marginTop: 14, width: "100%" }, onClick: stop }, "Stopp og lagre")
+          draftStart
+            ? h("div", { className: "row", style: { marginTop: 14 } },
+                h("button", { className: "primary", onClick: saveDraftStart }, "Lagre ny start"),
+                h("button", { className: "ghost", onClick: () => setDraftStart(null) }, "Avbryt")
+              )
+            : h("button", { className: "stop", style: { marginTop: 14, width: "100%" }, onClick: stop }, "Stopp og lagre")
         )
       : h("div", { className: "hero" },
           h("div", { className: "clock num", style: { color: "#3d4d5b" } }, "00:00:00"),

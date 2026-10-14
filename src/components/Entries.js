@@ -2,39 +2,36 @@
 import { h, useState } from "../react.js";
 import {
   newId, netDurationMs, formatDuration, formatDateISO, formatTimeHM,
-  parseDateTime, formatWeekdayDate, getBreakMinutes, roundTimeToNearest,
+  parseDateTime, formatWeekdayDate, getBreakMinutes, previousStopTime,
   projectsForJob, projectLabel,
 } from "../lib.js";
+import { Tidshjul } from "./Tidshjul.js";
 
 const HOUR_MS = 60 * 60 * 1000;
 
 // `initial` er satt når skjemaet brukes til å redigere en eksisterende føring (fra EntryRow).
 export function EntryForm({ data, update, onDone, initial }) {
-  const referenceDate = initial ? new Date(initial.start) : new Date();
   const [jobId, setJobId] = useState(initial?.jobId || data.jobs[0]?.id);
-  const [dateStr, setDateStr] = useState(formatDateISO(referenceDate));
-  const [fromTime, setFromTime] = useState(initial ? formatTimeHM(new Date(initial.start)) : "09:00");
-  const [toTime, setToTime] = useState(initial ? formatTimeHM(new Date(initial.end)) : "17:00");
+  const [times, setTimes] = useState(() => {
+    if (initial) return { start: new Date(initial.start), end: new Date(initial.end) };
+    const today = formatDateISO(new Date());
+    return { start: parseDateTime(today, "09:00"), end: parseDateTime(today, "17:00") };
+  });
   const [projectId, setProjectId] = useState(initial?.projectId || "");
   const [note, setNote] = useState(initial?.note || "");
   const [sups, setSups] = useState(initial?.sups || []);
   const [breakMinInput, setBreakMinInput] = useState(initial ? String(initial.breakMin || 0) : "");
-  const [roundMinutes, setRoundMinutes] = useState(5);
   const [error, setError] = useState("");
 
   const job = data.jobs.find((j) => j.id === jobId);
   const projects = projectsForJob(data, jobId);
 
-  const applyRounding = () => {
-    setFromTime(roundTimeToNearest(fromTime, roundMinutes));
-    setToTime(roundTimeToNearest(toTime, roundMinutes));
-  };
-
   const save = () => {
-    const start = parseDateTime(dateStr, fromTime);
-    let end = parseDateTime(dateStr, toTime);
-    if (end <= start) end = new Date(end.getTime() + 24 * HOUR_MS); // vakt over midnatt
-
+    const { start, end } = times;
+    if (end <= start) {
+      setError("Stopp må være etter start.");
+      return;
+    }
     if (end - start > 20 * HOUR_MS) {
       setError("Over 20 timer – sjekk klokkeslettene.");
       return;
@@ -67,16 +64,10 @@ export function EntryForm({ data, update, onDone, initial }) {
 
   return h(
     "div", { className: "card", style: { marginTop: 10 } },
-    h("div", { className: "row", style: { marginBottom: 8 } },
-      h("div", null,
-        h("label", null, "Jobb"),
-        h("select", { value: jobId, onChange: (e) => { setJobId(e.target.value); setSups([]); setProjectId(""); } },
-          data.jobs.map((j) => h("option", { key: j.id, value: j.id }, j.name))
-        )
-      ),
-      h("div", null,
-        h("label", null, "Dato"),
-        h("input", { type: "date", value: dateStr, onChange: (e) => setDateStr(e.target.value) })
+    h("div", { style: { marginBottom: 8 } },
+      h("label", null, "Jobb"),
+      h("select", { value: jobId, onChange: (e) => { setJobId(e.target.value); setSups([]); setProjectId(""); } },
+        data.jobs.map((j) => h("option", { key: j.id, value: j.id }, j.name))
       )
     ),
     // Prosjektvelger vises bare for jobber som faktisk bruker prosjekter.
@@ -89,27 +80,12 @@ export function EntryForm({ data, update, onDone, initial }) {
           h("option", { value: projectId }, projectLabel(data, projectId))
       )
     ),
-    h("div", { className: "row", style: { marginBottom: 8 } },
-      h("div", null,
-        h("label", null, "Fra"),
-        h("input", { type: "time", value: fromTime, onChange: (e) => setFromTime(e.target.value) })
-      ),
-      h("div", null,
-        h("label", null, "Til"),
-        h("input", { type: "time", value: toTime, onChange: (e) => setToTime(e.target.value) })
-      )
-    ),
-    h("div", { className: "row", style: { marginBottom: 8, alignItems: "flex-end" } },
-      h("div", { style: { flex: "0 0 150px" } },
-        h("label", null, "Rund av til nærmeste"),
-        h("select", { value: roundMinutes, onChange: (e) => setRoundMinutes(Number(e.target.value)) },
-          h("option", { value: 5 }, "5 min"),
-          h("option", { value: 10 }, "10 min"),
-          h("option", { value: 15 }, "15 min")
-        )
-      ),
-      h("button", { type: "button", className: "ghost tiny", style: { flex: "0 0 auto" }, onClick: applyRounding }, "Rund av fra/til")
-    ),
+    h(Tidshjul, {
+      start: times.start,
+      end: times.end,
+      onChange: (next) => { setTimes(next); setError(""); },
+      previousStop: previousStopTime(data.entries, times.end, initial?.id),
+    }),
     h("div", { className: "row", style: { marginBottom: 8 } },
       h("div", { style: { flex: "0 0 130px" } },
         h("label", null, "Lunsj (min)"),
