@@ -56,6 +56,45 @@ export function roundTimeToNearest(timeStr, minutes) {
   return `${pad2(Math.floor(wrapped / 60))}:${pad2(wrapped % 60)}`;
 }
 
+// --- Tidshjulet ---------------------------------------------------------
+// Start/stopp holdes som ekte Date-objekter, så dagskifte og sommertid håndteres av Date selv.
+
+export const MINUTE_MS = 60 * 1000;
+
+export const addMinutes = (date, minutes) => new Date(date.getTime() + minutes * MINUTE_MS);
+
+// Runder et tidspunkt til nærmeste 5/10/15 min (sekundene regnes med).
+export function roundDateToNearest(date, minutes) {
+  const clockMinutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+  const rounded = Math.round(clockMinutes / minutes) * minutes;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, rounded);
+}
+
+// Flytter stopp slik at varigheten blir et helt antall intervaller (aldri kortere enn ett).
+export function roundDurationEnd(start, end, minutes) {
+  const steps = Math.max(1, Math.round((end - start) / (minutes * MINUTE_MS)));
+  return addMinutes(start, steps * minutes);
+}
+
+// Første gang klokka viser `timeStr` etter `start` — samme dag, eller neste dag
+// når vakta går over midnatt. Føringer er alltid under ett døgn, så det er entydig.
+export function firstTimeAfter(start, timeStr) {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  const sameDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), hours, minutes);
+  return sameDay > start ? sameDay : new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1, hours, minutes);
+}
+
+// Når forrige føring sluttet, sett fra `before` (føringen som redigeres holdes utenfor).
+export function previousStopTime(entries, before, excludeId) {
+  let latest = null;
+  entries.forEach((e) => {
+    if (e.id === excludeId) return;
+    const end = new Date(e.end);
+    if (end <= before && (!latest || end > latest)) latest = end;
+  });
+  return latest;
+}
+
 export const formatWeekdayDate = (date) =>
   `${WEEKDAY_NAMES_SHORT[date.getDay()]} ${date.getDate()}. ${MONTH_NAMES_SHORT[date.getMonth()]}`;
 

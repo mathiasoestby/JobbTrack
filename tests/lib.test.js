@@ -11,6 +11,7 @@ import {
   projectsForJob, findProject, projectLabel, hoursByProject, projectBreakdown,
   getReportRange, entriesInRange, summarizeEntries, dailyTotals, jobBreakdown,
   bucketTotals, bucketUnitForRange,
+  addMinutes, roundDateToNearest, roundDurationEnd, firstTimeAfter, previousStopTime,
 } from "../src/lib.js";
 
 describe("formatering", () => {
@@ -404,5 +405,44 @@ describe("rapport", () => {
     assert.equal(rows[0].color, "#ffb23f");
     assert.equal(rows[0].gross, 6 * 200);
     assert.deepEqual(jobBreakdown([], jobs), []);
+  });
+});
+
+describe("tidshjul", () => {
+  const at = (day, hours, minutes, seconds = 0) => new Date(2026, 9, day, hours, minutes, seconds);
+
+  test("addMinutes flytter både fram og tilbake", () => {
+    assert.deepEqual(addMinutes(at(14, 9, 45), 20), at(14, 10, 5));
+    assert.deepEqual(addMinutes(at(14, 0, 5), -10), at(13, 23, 55));
+  });
+
+  test("roundDateToNearest runder med sekunder, og ruller over midnatt", () => {
+    assert.deepEqual(roundDateToNearest(at(14, 8, 47), 5), at(14, 8, 45));
+    assert.deepEqual(roundDateToNearest(at(14, 8, 47, 31), 5), at(14, 8, 50));
+    assert.deepEqual(roundDateToNearest(at(14, 9, 7, 29), 15), at(14, 9, 0));
+    assert.deepEqual(roundDateToNearest(at(14, 23, 58), 5), at(15, 0, 0));
+  });
+
+  test("roundDurationEnd gjør varigheten til et helt antall intervaller", () => {
+    assert.deepEqual(roundDurationEnd(at(14, 9, 45), at(14, 17, 52), 15), at(14, 17, 45));
+    assert.deepEqual(roundDurationEnd(at(14, 9, 45), at(14, 17, 53), 15), at(14, 18, 0));
+    assert.deepEqual(roundDurationEnd(at(14, 9, 45), at(14, 9, 47), 15), at(14, 10, 0)); // aldri null
+  });
+
+  test("firstTimeAfter legger stopp samme dag, eller neste ved nattevakt", () => {
+    assert.deepEqual(firstTimeAfter(at(14, 9, 0), "17:00"), at(14, 17, 0));
+    assert.deepEqual(firstTimeAfter(at(14, 22, 0), "06:00"), at(15, 6, 0));
+    assert.deepEqual(firstTimeAfter(at(14, 9, 0), "09:00"), at(15, 9, 0));
+  });
+
+  test("previousStopTime finner siste stopp før et tidspunkt, uten føringen selv", () => {
+    const entries = [
+      { id: "a", start: at(14, 8, 0).toISOString(), end: at(14, 10, 0).toISOString() },
+      { id: "b", start: at(14, 11, 0).toISOString(), end: at(14, 12, 30).toISOString() },
+      { id: "c", start: at(14, 13, 0).toISOString(), end: at(14, 15, 0).toISOString() },
+    ];
+    assert.deepEqual(previousStopTime(entries, at(14, 14, 0)), at(14, 12, 30));
+    assert.deepEqual(previousStopTime(entries, at(14, 15, 0), "c"), at(14, 12, 30));
+    assert.equal(previousStopTime(entries, at(14, 9, 0)), null);
   });
 });
